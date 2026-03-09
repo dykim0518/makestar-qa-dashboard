@@ -99,7 +99,7 @@ export function parsePlaywrightResults(report: PlaywrightReport): ParsedResults 
           file: spec.file || null,
           project: test.projectName || null,
           status,
-          durationMs: totalDuration,
+          durationMs: Math.round(totalDuration),
           errorMessage: errorInfo?.message?.slice(0, 2000) || null,
           errorStack: errorInfo?.stack?.slice(0, 4000) || null,
         });
@@ -125,7 +125,7 @@ export function parsePlaywrightResults(report: PlaywrightReport): ParsedResults 
     failed,
     flaky,
     skipped,
-    durationMs: stats.duration || 0,
+    durationMs: Math.round(stats.duration || 0),
     status: failed > 0 ? "failed" : "passed",
     testCases,
   };
