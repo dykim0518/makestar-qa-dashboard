@@ -10,17 +10,24 @@ const SUITES = [
   { value: "all", label: "All", desc: "전체 실행 (admin 제외)" },
 ];
 
-interface GitHubRun {
+interface TestCaseResult {
   id: number;
+  title: string;
+  file: string | null;
+  project: string | null;
   status: string;
-  conclusion: string | null;
+  durationMs: number;
+}
+
+interface RunSummary {
+  runId: number;
+  suite: string;
+  status: string;
+  total: number;
+  passed: number;
+  failed: number;
+  flaky: number;
   createdAt: string;
-  updatedAt: string;
-  htmlUrl: string;
-  branch: string;
-  event: string;
-  runNumber: number;
-  displayName: string;
 }
 
 export default function TriggerPage() {
@@ -36,39 +43,48 @@ export default function TriggerPage() {
     error?: string;
     actionsUrl?: string;
   } | null>(null);
-  const [runs, setRuns] = useState<GitHubRun[]>([]);
-  const [runsLoading, setRunsLoading] = useState(true);
+
+  // 최근 테스트 케이스 결과
+  const [latestRun, setLatestRun] = useState<RunSummary | null>(null);
+  const [testCases, setTestCases] = useState<TestCaseResult[]>([]);
+  const [casesLoading, setCasesLoading] = useState(true);
 
   const selectedSuite = SUITES.find((s) => s.value === suite);
 
-  const fetchRuns = useCallback(async () => {
+  const fetchLatestResults = useCallback(async () => {
     try {
-      const res = await fetch("/api/github-runs?limit=8");
-      if (res.ok) {
-        const data = await res.json();
-        setRuns(data);
+      const runsRes = await fetch("/api/runs?limit=1");
+      if (!runsRes.ok) return;
+      const runs = await runsRes.json();
+      if (runs.length === 0) return;
+
+      const run = runs[0];
+      setLatestRun(run);
+
+      const casesRes = await fetch(`/api/runs/${run.runId}/tests`);
+      if (casesRes.ok) {
+        setTestCases(await casesRes.json());
       }
     } catch {
       // ignore
     } finally {
-      setRunsLoading(false);
+      setCasesLoading(false);
     }
   }, []);
 
-  // 초기 로드 + 진행 중인 run이 있으면 10초마다 폴링
   useEffect(() => {
-    fetchRuns();
-  }, [fetchRuns]);
+    fetchLatestResults();
+  }, [fetchLatestResults]);
 
+  // 트리거 후 새 결과가 들어올 때까지 폴링
+  const [polling, setPolling] = useState(false);
   useEffect(() => {
-    const hasActive = runs.some(
-      (r) => r.status === "queued" || r.status === "in_progress"
-    );
-    if (!hasActive) return;
-
-    const interval = setInterval(fetchRuns, 10000);
+    if (!polling) return;
+    const interval = setInterval(async () => {
+      await fetchLatestResults();
+    }, 15000);
     return () => clearInterval(interval);
-  }, [runs, fetchRuns]);
+  }, [polling, fetchLatestResults]);
 
   async function handleTrigger() {
     setLoading(true);
@@ -82,9 +98,10 @@ export default function TriggerPage() {
       });
       const data = await res.json();
       setResult(data);
-      // 트리거 후 3초 뒤에 실행 목록 갱신
       if (data.ok) {
-        setTimeout(fetchRuns, 3000);
+        setPolling(true);
+        // 10분 후 폴링 중지
+        setTimeout(() => setPolling(false), 600000);
       }
     } catch {
       setResult({ ok: false, error: "네트워크 오류" });
@@ -92,6 +109,10 @@ export default function TriggerPage() {
       setLoading(false);
     }
   }
+
+  const failedCases = testCases.filter((c) => c.status === "failed");
+  const flakyCases = testCases.filter((c) => c.status === "flaky");
+  const passedCases = testCases.filter((c) => c.status === "passed");
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -108,35 +129,26 @@ export default function TriggerPage() {
             </Link>
           </div>
           <nav className="flex gap-2 text-sm">
-            <Link
-              href="/dashboard"
-              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition-colors hover:text-white hover:bg-white/5"
-            >
+            <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition-colors hover:text-white hover:bg-white/5">
               대시보드
             </Link>
-            <Link
-              href="/trigger"
-              className="rounded-lg bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-400"
-            >
+            <Link href="/trigger" className="rounded-lg bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-400">
               테스트 실행
             </Link>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8">
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
           {/* 왼쪽: 트리거 폼 */}
           <div>
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
               테스트 실행 트리거
             </h2>
-
             <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6">
               <fieldset className="mb-6">
-                <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                  Suite
-                </legend>
+                <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Suite</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {SUITES.map((s) => (
                     <button
@@ -154,9 +166,7 @@ export default function TriggerPage() {
                           {s.label}
                         </span>
                         {s.warn && (
-                          <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
-                            VPN
-                          </span>
+                          <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">VPN</span>
                         )}
                       </div>
                       <p className="mt-1 text-xs text-[var(--muted)]">{s.desc}</p>
@@ -182,12 +192,7 @@ export default function TriggerPage() {
                 <InputField id="grep" label="Grep 패턴 (선택)" placeholder="예: CMR-HOME, CMR-SEARCH" value={grep} onChange={setGrep} />
                 <div>
                   <label htmlFor="retries" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Retries</label>
-                  <select
-                    id="retries"
-                    value={retries}
-                    onChange={(e) => setRetries(e.target.value)}
-                    className="w-full rounded-lg border border-[var(--card-border)] bg-white/[0.02] px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20"
-                  >
+                  <select id="retries" value={retries} onChange={(e) => setRetries(e.target.value)} className="w-full rounded-lg border border-[var(--card-border)] bg-white/[0.02] px-3 py-2.5 text-sm text-slate-200 outline-none transition-colors focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20">
                     {[0, 1, 2, 3, 4, 5].map((n) => (
                       <option key={n} value={n} className="bg-[var(--card)]">{n}</option>
                     ))}
@@ -223,9 +228,10 @@ export default function TriggerPage() {
                   {result.ok ? (
                     <div>
                       <p className="text-sm font-semibold text-emerald-400">{result.message}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">완료 후 오른쪽 패널에 결과가 자동 갱신됩니다.</p>
                       {result.actionsUrl && (
                         <a href={result.actionsUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
-                          GitHub Actions에서 확인
+                          GitHub Actions에서 실시간 확인
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                           </svg>
@@ -240,14 +246,25 @@ export default function TriggerPage() {
             </div>
           </div>
 
-          {/* 오른쪽: 실행 현황 */}
+          {/* 오른쪽: 최근 테스트 케이스 결과 */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-                실행 현황
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  최근 테스트 결과
+                </h2>
+                {polling && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
+                    <svg className="h-2.5 w-2.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    대기 중
+                  </span>
+                )}
+              </div>
               <button
-                onClick={fetchRuns}
+                onClick={() => { setCasesLoading(true); fetchLatestResults(); }}
                 className="rounded p-1 text-[var(--muted)] hover:text-white hover:bg-white/5 transition-colors"
                 title="새로고침"
               >
@@ -257,22 +274,61 @@ export default function TriggerPage() {
               </button>
             </div>
 
-            <div className="space-y-2">
-              {runsLoading ? (
-                <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6 text-center">
-                  <svg className="mx-auto h-5 w-5 animate-spin text-[var(--muted)]" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
+            {casesLoading ? (
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-10 text-center">
+                <svg className="mx-auto h-5 w-5 animate-spin text-[var(--muted)]" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            ) : !latestRun ? (
+              <div className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card)] p-10 text-center text-sm text-[var(--muted)]">
+                아직 테스트 결과가 없습니다
+              </div>
+            ) : (
+              <>
+                {/* Run 요약 헤더 */}
+                <Link
+                  href={`/runs/${latestRun.runId}`}
+                  className="mb-3 flex items-center justify-between rounded-xl border border-[var(--card-border)] bg-[var(--card)] px-4 py-3 transition-all hover:border-indigo-500/30"
+                >
+                  <div className="flex items-center gap-3">
+                    <RunStatusDot status={latestRun.status} />
+                    <div>
+                      <span className="text-sm font-semibold text-slate-200">
+                        Run #{latestRun.runId}
+                      </span>
+                      <span className="ml-2 rounded border border-[var(--card-border)] bg-white/5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+                        {latestRun.suite}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-emerald-400 font-semibold">{latestRun.passed}</span>
+                    <span className="text-[var(--muted)]">/</span>
+                    <span className="text-slate-300">{latestRun.total}</span>
+                    {latestRun.failed > 0 && (
+                      <span className="ml-1 rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-400">
+                        {latestRun.failed} failed
+                      </span>
+                    )}
+                  </div>
+                </Link>
+
+                {/* 테스트 케이스 목록 */}
+                <div className="max-h-[calc(100vh-220px)] overflow-y-auto space-y-1 pr-1">
+                  {failedCases.length > 0 && (
+                    <CaseGroup label="실패" count={failedCases.length} dotColor="bg-rose-400" cases={failedCases} />
+                  )}
+                  {flakyCases.length > 0 && (
+                    <CaseGroup label="Flaky" count={flakyCases.length} dotColor="bg-amber-400" cases={flakyCases} />
+                  )}
+                  {passedCases.length > 0 && (
+                    <CaseGroup label="통과" count={passedCases.length} dotColor="bg-emerald-400" cases={passedCases} />
+                  )}
                 </div>
-              ) : runs.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card)] p-6 text-center text-sm text-[var(--muted)]">
-                  실행 기록이 없습니다
-                </div>
-              ) : (
-                runs.map((run) => <RunCard key={run.id} run={run} />)
-              )}
-            </div>
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -280,97 +336,77 @@ export default function TriggerPage() {
   );
 }
 
-function RunCard({ run }: { run: GitHubRun }) {
-  const isActive = run.status === "queued" || run.status === "in_progress";
-  const elapsed = getElapsed(run.createdAt);
-
-  return (
-    <a
-      href={run.htmlUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`block rounded-lg border p-3 transition-all hover:border-indigo-500/30 ${
-        isActive
-          ? "border-indigo-500/30 bg-indigo-500/5"
-          : "border-[var(--card-border)] bg-[var(--card)]"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-mono text-slate-400">
-          #{run.runNumber}
-        </span>
-        <RunStatusBadge status={run.status} conclusion={run.conclusion} />
-      </div>
-      <p className="text-sm font-medium text-slate-200 truncate mb-1.5">
-        {run.displayName}
-      </p>
-      <div className="flex items-center gap-3 text-[10px] text-[var(--muted)]">
-        <span className="font-mono">{run.branch}</span>
-        <span>{run.event}</span>
-        <span>{elapsed}</span>
-      </div>
-    </a>
-  );
-}
-
-function RunStatusBadge({
-  status,
-  conclusion,
+function CaseGroup({
+  label,
+  count,
+  dotColor,
+  cases,
 }: {
-  status: string;
-  conclusion: string | null;
+  label: string;
+  count: number;
+  dotColor: string;
+  cases: TestCaseResult[];
 }) {
-  if (status === "queued") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-        대기 중
-      </span>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
-        <svg className="h-2.5 w-2.5 animate-spin" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-        실행 중
-      </span>
-    );
-  }
-  if (conclusion === "success") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-        성공
-      </span>
-    );
-  }
-  if (conclusion === "failure") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-        실패
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-      {conclusion || status}
-    </span>
+    <div className="mb-2">
+      <div className="flex items-center gap-2 px-1 py-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+          {label}
+        </span>
+        <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-[var(--muted)]">
+          {count}
+        </span>
+      </div>
+      {cases.map((tc) => (
+        <CaseRow key={tc.id} tc={tc} />
+      ))}
+    </div>
   );
 }
 
-function getElapsed(createdAt: string): string {
-  const diff = Date.now() - new Date(createdAt).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "방금 전";
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
+function CaseRow({ tc }: { tc: TestCaseResult }) {
+  const statusConfig: Record<string, { dot: string; text: string }> = {
+    passed: { dot: "bg-emerald-400", text: "text-emerald-400" },
+    failed: { dot: "bg-rose-400", text: "text-rose-400" },
+    flaky: { dot: "bg-amber-400", text: "text-amber-400" },
+    skipped: { dot: "bg-slate-400", text: "text-slate-400" },
+  };
+  const config = statusConfig[tc.status] || statusConfig.skipped;
+
+  // 테스트 제목에서 ID 부분 분리 (예: "CMR-HOME-01: 메인 페이지...")
+  const idMatch = tc.title.match(/^([A-Z]+-[A-Z]+-\d+):\s*(.+)$/);
+
+  const durationSec = (tc.durationMs / 1000).toFixed(1);
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors hover:bg-white/[0.02]">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${config.dot}`} />
+      <div className="min-w-0 flex-1">
+        {idMatch ? (
+          <p className="text-xs truncate">
+            <span className={`font-mono font-semibold ${config.text}`}>{idMatch[1]}</span>
+            <span className="text-slate-400 ml-1">{idMatch[2]}</span>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-300 truncate">{tc.title}</p>
+        )}
+      </div>
+      <span className="shrink-0 text-[10px] font-mono text-[var(--muted)]">
+        {durationSec}s
+      </span>
+    </div>
+  );
+}
+
+function RunStatusDot({ status }: { status: string }) {
+  if (status === "passed") {
+    return <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />;
+  }
+  if (status === "failed") {
+    return <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />;
+  }
+  return <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />;
 }
 
 function InputField({
