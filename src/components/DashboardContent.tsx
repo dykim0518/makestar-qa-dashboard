@@ -17,8 +17,8 @@ export function DashboardContent({
   const [runs, setRuns] = useState<TestRun[]>(initialRuns);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(0);
-  const latestRun = page === 0 ? runs[0] || null : null;
-  const hasRunning = runs.some((r) => r.status === "running");
+  const [latestRun, setLatestRun] = useState<TestRun | null>(initialRuns[0] || null);
+  const hasRunning = latestRun?.status === "running" || runs.some((r) => r.status === "running");
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const fetchRuns = useCallback(
@@ -31,6 +31,10 @@ export function DashboardContent({
         const data = await res.json();
         setRuns(data.runs);
         setTotal(data.total);
+        // 첫 페이지 조회 시 latestRun 갱신
+        if (p === 0 && data.runs.length > 0) {
+          setLatestRun(data.runs[0]);
+        }
       } catch {
         // ignore
       }
@@ -38,23 +42,43 @@ export function DashboardContent({
     []
   );
 
+  // 최신 run은 페이지와 무관하게 항상 갱신
+  const fetchLatestRun = useCallback(async () => {
+    try {
+      const res = await fetch("/api/runs?limit=1&offset=0");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.runs.length > 0) setLatestRun(data.runs[0]);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // 페이지 변경 시 데이터 fetch
   useEffect(() => {
     if (page === 0) return; // 첫 페이지는 initialRuns 사용
     fetchRuns(page);
   }, [page, fetchRuns]);
 
-  // running 상태가 있을 때만 5초 폴링
+  // running 상태가 있을 때만 5초 폴링 (현재 페이지 + 최신 run)
   useEffect(() => {
     if (!hasRunning) return;
-    const interval = setInterval(() => fetchRuns(page), 5000);
+    const interval = setInterval(() => {
+      fetchRuns(page);
+      if (page !== 0) fetchLatestRun();
+    }, 5000);
     return () => clearInterval(interval);
-  }, [hasRunning, page, fetchRuns]);
+  }, [hasRunning, page, fetchRuns, fetchLatestRun]);
 
   function goToPage(p: number) {
     if (p < 0 || p >= totalPages) return;
     setPage(p);
-    if (p === 0) fetchRuns(0); // 첫 페이지로 돌아올 때도 최신 데이터
+    if (p === 0) {
+      fetchRuns(0);
+    } else {
+      fetchRuns(p);
+      fetchLatestRun();
+    }
   }
 
   return (
