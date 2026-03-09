@@ -236,9 +236,21 @@ export default function TriggerPage() {
                 </div>
               </div>
 
+              {alreadyRunning && !result && (
+                <div className="mb-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-indigo-400">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-400" />
+                    </span>
+                    현재 다른 테스트가 실행 중입니다. 실행 시 큐에 추가되어 순차적으로 진행됩니다.
+                  </p>
+                </div>
+              )}
+
               <button
                 onClick={handleTrigger}
-                disabled={loading || alreadyRunning}
+                disabled={loading}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
@@ -249,31 +261,15 @@ export default function TriggerPage() {
                     </svg>
                     트리거 중...
                   </>
-                ) : alreadyRunning ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    테스트 실행 중...
-                  </>
                 ) : (
                   <>
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                     </svg>
-                    테스트 실행
+                    {alreadyRunning ? "큐에 추가" : "테스트 실행"}
                   </>
                 )}
               </button>
-
-              {alreadyRunning && !result && (
-                <div className="mt-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3">
-                  <p className="text-xs font-semibold text-indigo-400">
-                    이미 테스트가 실행 중입니다. 완료 후 다시 시도해주세요.
-                  </p>
-                </div>
-              )}
 
               {result && (
                 <div className={`mt-4 rounded-lg border px-4 py-3 ${result.ok ? "border-emerald-500/20 bg-emerald-500/5" : "border-rose-500/20 bg-rose-500/5"}`}>
