@@ -129,7 +129,7 @@ export function TrendCharts() {
     fetchTrends();
   }, [fetchTrends]);
 
-  const hasData = points.length >= 2;
+  const hasData = points.length >= 1;
 
   // 실행 시간을 분 단위로 변환한 데이터
   const chartData = points.map((p) => ({
