@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { testRuns, testCases } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { validateApiSecret } from "@/lib/auth";
 import { parsePlaywrightResults } from "@/lib/results-parser";
 
@@ -67,9 +68,11 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // 기존 test_cases 삭제 후 재삽입 (upsert 대응)
+  await db.delete(testCases).where(eq(testCases.runId, runId));
+
   if (parsed.testCases.length > 0) {
     const cases = parsed.testCases.map((tc) => ({ ...tc, runId }));
-    // Batch insert in chunks of 100
     for (let i = 0; i < cases.length; i += 100) {
       await db.insert(testCases).values(cases.slice(i, i + 100));
     }
