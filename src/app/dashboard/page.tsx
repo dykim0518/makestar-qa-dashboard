@@ -1,29 +1,31 @@
-import { SummaryCards } from "@/components/SummaryCards";
-import { RunsTable } from "@/components/RunsTable";
+import { DashboardContent } from "@/components/DashboardContent";
 import Link from "next/link";
 import type { TestRun } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-async function getRuns(): Promise<TestRun[]> {
+async function getRuns(): Promise<{ runs: TestRun[]; total: number }> {
   try {
     const { db } = await import("@/db");
     const { testRuns } = await import("@/db/schema");
-    const { desc } = await import("drizzle-orm");
-    return await db
-      .select()
-      .from(testRuns)
-      .orderBy(desc(testRuns.createdAt))
-      .limit(20);
+    const { desc, sql } = await import("drizzle-orm");
+    const [runs, countResult] = await Promise.all([
+      db
+        .select()
+        .from(testRuns)
+        .orderBy(desc(testRuns.createdAt))
+        .limit(10),
+      db.select({ count: sql<number>`count(*)` }).from(testRuns),
+    ]);
+    return { runs, total: Number(countResult[0].count) };
   } catch {
     const { mockRuns } = await import("@/lib/mock-data");
-    return mockRuns;
+    return { runs: mockRuns, total: mockRuns.length };
   }
 }
 
 export default async function DashboardPage() {
-  const runs = await getRuns();
-  const latestRun = runs[0] || null;
+  const { runs, total } = await getRuns();
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -57,19 +59,7 @@ export default async function DashboardPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <section className="mb-8">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-            최근 실행 요약
-          </h2>
-          <SummaryCards latestRun={latestRun} />
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-            실행 히스토리
-          </h2>
-          <RunsTable runs={runs} />
-        </section>
+        <DashboardContent initialRuns={runs} initialTotal={total} />
       </main>
     </div>
   );

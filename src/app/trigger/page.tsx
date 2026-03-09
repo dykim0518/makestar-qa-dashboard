@@ -62,10 +62,10 @@ export default function TriggerPage() {
     try {
       const runsRes = await fetch("/api/runs?limit=1");
       if (!runsRes.ok) return;
-      const runs = await runsRes.json();
-      if (runs.length === 0) return;
+      const data = await runsRes.json();
+      if (data.runs.length === 0) return;
 
-      const run = runs[0];
+      const run = data.runs[0];
       setAlreadyRunning(run.status === "running");
 
       // 트리거 후 대기 중: 이전 run과 같으면 아직 새 run이 안 들어온 것
