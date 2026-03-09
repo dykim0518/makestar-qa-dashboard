@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { testRuns, testCases } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { validateApiSecret } from "@/lib/auth";
 import { parsePlaywrightResults } from "@/lib/results-parser";
 
@@ -67,6 +67,14 @@ export async function POST(request: NextRequest) {
       durationMs: parsed.durationMs,
     },
   });
+
+  // 다른 "running" 상태의 run을 "cancelled"로 정리
+  await db
+    .update(testRuns)
+    .set({ status: "cancelled" })
+    .where(
+      sql`${testRuns.status} = 'running' AND ${testRuns.runId} != ${runId}`
+    );
 
   // 기존 test_cases 삭제 후 재삽입 (upsert 대응)
   await db.delete(testCases).where(eq(testCases.runId, runId));
