@@ -70,6 +70,20 @@ export default async function RunDetailPage({
               Makestar QA Dashboard
             </Link>
           </div>
+          <nav className="flex gap-2 text-sm">
+            <Link
+              href="/dashboard"
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition-colors hover:text-white hover:bg-white/5"
+            >
+              대시보드
+            </Link>
+            <Link
+              href="/trigger"
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition-colors hover:text-white hover:bg-white/5"
+            >
+              테스트 실행
+            </Link>
+          </nav>
         </div>
       </header>
 

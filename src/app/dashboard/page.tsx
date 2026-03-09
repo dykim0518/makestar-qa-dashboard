@@ -39,12 +39,18 @@ export default async function DashboardPage() {
               Makestar QA Dashboard
             </h1>
           </div>
-          <nav className="flex gap-4 text-sm">
+          <nav className="flex gap-2 text-sm">
             <Link
               href="/dashboard"
-              className="rounded-lg bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-400 transition-colors hover:bg-indigo-500/20"
+              className="rounded-lg bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-400"
             >
               대시보드
+            </Link>
+            <Link
+              href="/trigger"
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition-colors hover:text-white hover:bg-white/5"
+            >
+              테스트 실행
             </Link>
           </nav>
         </div>
