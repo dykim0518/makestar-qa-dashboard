@@ -49,6 +49,8 @@ export default function TriggerPage() {
   const [testCases, setTestCases] = useState<TestCaseResult[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [triggered, setTriggered] = useState(false);
+  // 이미 실행 중인 테스트가 있는지 확인
+  const [alreadyRunning, setAlreadyRunning] = useState(false);
 
   const selectedSuite = SUITES.find((s) => s.value === suite);
 
@@ -61,10 +63,12 @@ export default function TriggerPage() {
 
       const run = runs[0];
       setLatestRun(run);
+      setAlreadyRunning(run.status === "running");
 
       // running 상태 감지 시 자동 폴링 시작
       if (run.status === "running") {
         setPolling(true);
+        setTriggered(true);
       }
 
       const casesRes = await fetch(`/api/runs/${run.runId}/tests`);
@@ -77,6 +81,11 @@ export default function TriggerPage() {
       setCasesLoading(false);
     }
   }, []);
+
+  // 페이지 진입 시 실행 중인 테스트가 있는지 확인
+  useEffect(() => {
+    fetchLatestResults();
+  }, [fetchLatestResults]);
 
   // 폴링: running 상태일 때 5초, 아니면 15초
   const [polling, setPolling] = useState(false);
@@ -229,7 +238,7 @@ export default function TriggerPage() {
 
               <button
                 onClick={handleTrigger}
-                disabled={loading}
+                disabled={loading || alreadyRunning}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? (
@@ -240,6 +249,14 @@ export default function TriggerPage() {
                     </svg>
                     트리거 중...
                   </>
+                ) : alreadyRunning ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    테스트 실행 중...
+                  </>
                 ) : (
                   <>
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -249,6 +266,14 @@ export default function TriggerPage() {
                   </>
                 )}
               </button>
+
+              {alreadyRunning && !result && (
+                <div className="mt-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-4 py-3">
+                  <p className="text-xs font-semibold text-indigo-400">
+                    이미 테스트가 실행 중입니다. 완료 후 다시 시도해주세요.
+                  </p>
+                </div>
+              )}
 
               {result && (
                 <div className={`mt-4 rounded-lg border px-4 py-3 ${result.ok ? "border-emerald-500/20 bg-emerald-500/5" : "border-rose-500/20 bg-rose-500/5"}`}>
