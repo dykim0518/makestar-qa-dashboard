@@ -44,10 +44,11 @@ export default function TriggerPage() {
     actionsUrl?: string;
   } | null>(null);
 
-  // 최근 테스트 케이스 결과
+  // 테스트 결과 (트리거 후에만 표시)
   const [latestRun, setLatestRun] = useState<RunSummary | null>(null);
   const [testCases, setTestCases] = useState<TestCaseResult[]>([]);
-  const [casesLoading, setCasesLoading] = useState(true);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [triggered, setTriggered] = useState(false);
 
   const selectedSuite = SUITES.find((s) => s.value === suite);
 
@@ -76,10 +77,6 @@ export default function TriggerPage() {
       setCasesLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchLatestResults();
-  }, [fetchLatestResults]);
 
   // 폴링: running 상태일 때 5초, 아니면 15초
   const [polling, setPolling] = useState(false);
@@ -121,7 +118,12 @@ export default function TriggerPage() {
       const data = await res.json();
       setResult(data);
       if (data.ok) {
+        setTriggered(true);
+        setCasesLoading(true);
+        setLatestRun(null);
+        setTestCases([]);
         setPolling(true);
+        fetchLatestResults();
         // 10분 후 폴링 중지
         setTimeout(() => setPolling(false), 600000);
       }
@@ -297,27 +299,34 @@ export default function TriggerPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => { setCasesLoading(true); fetchLatestResults(); }}
-                className="rounded p-1 text-[var(--muted)] hover:text-white hover:bg-white/5 transition-colors"
-                title="새로고침"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                </svg>
-              </button>
+              {triggered && (
+                <button
+                  onClick={() => { setCasesLoading(true); fetchLatestResults(); }}
+                  className="rounded p-1 text-[var(--muted)] hover:text-white hover:bg-white/5 transition-colors"
+                  title="새로고침"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                  </svg>
+                </button>
+              )}
             </div>
 
-            {casesLoading ? (
+            {!triggered ? (
+              <div className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card)] p-10 text-center text-sm text-[var(--muted)]">
+                테스트를 실행하면 결과가 여기에 표시됩니다
+              </div>
+            ) : casesLoading && !latestRun ? (
               <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-10 text-center">
-                <svg className="mx-auto h-5 w-5 animate-spin text-[var(--muted)]" viewBox="0 0 24 24" fill="none">
+                <svg className="mx-auto h-5 w-5 animate-spin text-[var(--muted)] mb-2" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
+                <p className="text-xs text-[var(--muted)]">테스트 시작 대기 중...</p>
               </div>
             ) : !latestRun ? (
               <div className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card)] p-10 text-center text-sm text-[var(--muted)]">
-                아직 테스트 결과가 없습니다
+                테스트 결과를 불러오는 중...
               </div>
             ) : (
               <>
