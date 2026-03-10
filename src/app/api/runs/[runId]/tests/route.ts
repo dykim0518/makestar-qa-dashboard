@@ -18,6 +18,7 @@ export async function GET(
   const project = searchParams.get("project");
   const search = searchParams.get("search");
   const sort = searchParams.get("sort");
+  const category = searchParams.get("category");
 
   const conditions: SQL[] = [eq(testCases.runId, runId)];
 
@@ -29,6 +30,9 @@ export async function GET(
   }
   if (search) {
     conditions.push(ilike(testCases.title, `%${search}%`));
+  }
+  if (category) {
+    conditions.push(eq(testCases.errorCategory, category));
   }
 
   let orderBy;

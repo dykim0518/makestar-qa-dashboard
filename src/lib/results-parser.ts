@@ -1,4 +1,5 @@
 import type { NewTestCase } from "@/db/schema";
+import { classifyError } from "./error-classifier";
 
 interface PlaywrightResult {
   status: string;
@@ -94,14 +95,16 @@ export function parsePlaywrightResults(report: PlaywrightReport): ParsedResults 
         );
         const errorInfo = firstError?.errors?.[0];
 
+        const errorMsg = errorInfo?.message?.slice(0, 2000) || null;
         testCases.push({
           title,
           file: spec.file || null,
           project: test.projectName || null,
           status,
           durationMs: Math.round(totalDuration),
-          errorMessage: errorInfo?.message?.slice(0, 2000) || null,
+          errorMessage: errorMsg,
           errorStack: errorInfo?.stack?.slice(0, 4000) || null,
+          errorCategory: classifyError(errorMsg),
         });
       }
     }

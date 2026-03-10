@@ -4,6 +4,7 @@ import { testRuns, testCases } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { validateApiSecret } from "@/lib/auth";
 import { parsePlaywrightResults } from "@/lib/results-parser";
+import { sendSlackNotification } from "@/lib/slack-notifier";
 
 export async function POST(request: NextRequest) {
   const authError = validateApiSecret(request);
@@ -85,6 +86,17 @@ export async function POST(request: NextRequest) {
       await db.insert(testCases).values(cases.slice(i, i + 100));
     }
   }
+
+  // Slack 알림 (fire-and-forget)
+  sendSlackNotification({
+    runId,
+    suite,
+    status: parsed.status,
+    total: parsed.total,
+    passed: parsed.passed,
+    failed: parsed.failed,
+    flaky: parsed.flaky,
+  });
 
   return NextResponse.json({
     ok: true,

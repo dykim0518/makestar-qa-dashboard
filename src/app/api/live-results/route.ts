@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { testRuns, testCases } from "@/db/schema";
 import { eq, ne, sql } from "drizzle-orm";
 import { validateApiSecret } from "@/lib/auth";
+import { classifyError } from "@/lib/error-classifier";
+import { sendSlackNotification } from "@/lib/slack-notifier";
 
 export async function POST(request: NextRequest) {
   const authError = validateApiSecret(request);
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
         const { title, file, project, status, durationMs, errorMessage, errorStack } = body;
 
         // 테스트 케이스 삽입
+        const errorMsg = errorMessage || null;
         await db.insert(testCases).values({
           runId,
           title: title || "Unknown",
@@ -81,8 +84,9 @@ export async function POST(request: NextRequest) {
           project: project || null,
           status: status || "passed",
           durationMs: Math.round(durationMs || 0),
-          errorMessage: errorMessage || null,
+          errorMessage: errorMsg,
           errorStack: errorStack || null,
+          errorCategory: classifyError(errorMsg),
         });
 
         // testRuns 카운터 업데이트
@@ -107,11 +111,23 @@ export async function POST(request: NextRequest) {
       }
 
       case "end": {
-        const { status } = body;
+        const { status, suite, total, passed: passedCount, failed: failedCount, flaky: flakyCount } = body;
+        const finalStatus = status || "passed";
         await db
           .update(testRuns)
-          .set({ status: status || "passed" })
+          .set({ status: finalStatus })
           .where(eq(testRuns.runId, runId));
+
+        // Slack 알림 (fire-and-forget)
+        sendSlackNotification({
+          runId,
+          suite: suite || "cmr",
+          status: finalStatus,
+          total: total || 0,
+          passed: passedCount || 0,
+          failed: failedCount || 0,
+          flaky: flakyCount || 0,
+        });
 
         return NextResponse.json({ ok: true, event: "end" });
       }

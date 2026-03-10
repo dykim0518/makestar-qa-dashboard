@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TestCase } from "@/db/schema";
 import { StatusBadge } from "./StatusBadge";
+import { ErrorCategoryBadge } from "./ErrorCategoryBadge";
 import { formatDuration } from "@/lib/format";
 
 export function TestCasesList({
@@ -46,6 +47,9 @@ function TestCaseRow({
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3 min-w-0">
           <StatusBadge status={testCase.status} />
+          {testCase.errorCategory && (testCase.status === "failed" || testCase.status === "flaky") && (
+            <ErrorCategoryBadge category={testCase.errorCategory} />
+          )}
           <span className="text-sm font-medium text-slate-200 truncate">
             {testCase.title}
           </span>

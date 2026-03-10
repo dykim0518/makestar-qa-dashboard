@@ -6,9 +6,12 @@ import type { TestRun, TestCase } from "@/db/schema";
 import { StatusBadge } from "./StatusBadge";
 import { TestCasesList } from "./TestCasesList";
 import { formatDuration, formatDate, getPassRate, getPassRateNumber } from "@/lib/format";
+import { ERROR_CATEGORY_DISPLAY, type ErrorCategory } from "@/lib/error-classifier";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 type StatusFilter = "all" | "failed" | "flaky" | "passed" | "skipped";
 type SortOption = "default" | "duration_desc" | "duration_asc" | "title_asc";
+type CategoryFilter = "" | ErrorCategory;
 
 interface RunDetailProps {
   run: TestRun;
@@ -18,6 +21,7 @@ interface RunDetailProps {
 export function RunDetail({ run, initialCases }: RunDetailProps) {
   const [cases, setCases] = useState(initialCases);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("default");
   const [loading, setLoading] = useState(false);
@@ -25,13 +29,14 @@ export function RunDetail({ run, initialCases }: RunDetailProps) {
   const mountedRef = useRef(false);
 
   const fetchCases = useCallback(
-    async (status: StatusFilter, searchText: string, sortBy: SortOption) => {
+    async (status: StatusFilter, searchText: string, sortBy: SortOption, cat: CategoryFilter = "") => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
         if (status !== "all") params.set("status", status);
         if (searchText) params.set("search", searchText);
         if (sortBy !== "default") params.set("sort", sortBy);
+        if (cat) params.set("category", cat);
 
         const res = await fetch(`/api/runs/${run.runId}/tests?${params}`);
         if (res.ok) {
@@ -44,22 +49,22 @@ export function RunDetail({ run, initialCases }: RunDetailProps) {
     [run.runId]
   );
 
-  // status/sort 변경 시 즉시 fetch (초기 마운트 건너뛰기)
+  // status/sort/category 변경 시 즉시 fetch (초기 마운트 건너뛰기)
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
-    fetchCases(statusFilter, search, sort);
+    fetchCases(statusFilter, search, sort, categoryFilter);
     // search는 debounce에서 처리하므로 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, sort, fetchCases]);
+  }, [statusFilter, sort, categoryFilter, fetchCases]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchCases(statusFilter, value, sort);
+      fetchCases(statusFilter, value, sort, categoryFilter);
     }, 300);
   };
 
@@ -72,6 +77,29 @@ export function RunDetail({ run, initialCases }: RunDetailProps) {
   };
 
   const passRate = getPassRateNumber(run.passed, run.total);
+
+  // 실패/flaky 테스트의 카테고리 분포 계산
+  const failedOrFlaky = initialCases.filter((c) => c.status === "failed" || c.status === "flaky");
+  const categoryCounts = failedOrFlaky.reduce<Record<string, number>>((acc, c) => {
+    const cat = c.errorCategory || "unknown";
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+
+  const PIE_COLORS: Record<string, string> = {
+    network_timeout: "#fb923c",
+    selector_not_found: "#a78bfa",
+    assertion_failure: "#60a5fa",
+    environment_issue: "#f87171",
+    unknown: "#94a3b8",
+  };
+
+  const pieData = Object.entries(categoryCounts).map(([name, value]) => ({
+    name: ERROR_CATEGORY_DISPLAY[name as ErrorCategory]?.label || name,
+    value,
+    key: name,
+    color: PIE_COLORS[name] || "#94a3b8",
+  }));
 
   const statusTabs: { key: StatusFilter; label: string; color: string }[] = [
     { key: "all", label: "전체", color: "text-white" },
@@ -208,6 +236,43 @@ export function RunDetail({ run, initialCases }: RunDetailProps) {
             ))}
           </div>
 
+          {/* 카테고리 필터 (실패/flaky가 있을 때만) */}
+          {failedOrFlaky.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setCategoryFilter("")}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  categoryFilter === ""
+                    ? "text-white bg-white/10"
+                    : "text-[var(--muted)] hover:text-white hover:bg-white/5"
+                }`}
+              >
+                전체 카테고리
+              </button>
+              {(Object.keys(ERROR_CATEGORY_DISPLAY) as ErrorCategory[]).map((cat) => {
+                const count = categoryCounts[cat] || 0;
+                if (count === 0) return null;
+                const display = ERROR_CATEGORY_DISPLAY[cat];
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(categoryFilter === cat ? "" : cat)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      categoryFilter === cat
+                        ? `${display.color} bg-white/10`
+                        : "text-[var(--muted)] hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {display.label}
+                    <span className="ml-1.5 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-bold">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* 검색 + 정렬 */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -245,6 +310,58 @@ export function RunDetail({ run, initialCases }: RunDetailProps) {
             </div>
           </div>
         </div>
+
+        {/* 실패 분류 분포 */}
+        {pieData.length > 0 && (
+          <div className="mb-6 overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-6">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)] mb-4">
+              실패 분류 분포
+            </h3>
+            <div className="flex items-center gap-8">
+              <div className="w-48 h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={70}
+                      paddingAngle={2}
+                    >
+                      {pieData.map((entry) => (
+                        <Cell key={entry.key} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1e293b",
+                        border: "1px solid #334155",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      itemStyle={{ color: "#e2e8f0" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-2">
+                {pieData.map((entry) => (
+                  <div key={entry.key} className="flex items-center gap-2 text-sm">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="text-slate-300">{entry.name}</span>
+                    <span className="font-mono text-slate-400">{entry.value}건</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 테스트 목록 */}
         <div className={`transition-opacity ${loading ? "opacity-50" : ""}`}>

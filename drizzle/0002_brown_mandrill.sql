@@ -1,0 +1,1 @@
+ALTER TABLE "test_cases" ADD COLUMN "error_category" text;

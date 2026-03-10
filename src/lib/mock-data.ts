@@ -92,6 +92,7 @@ export const mockTestCases: TestCase[] = [
     durationMs: 3200,
     errorMessage: null,
     errorStack: null,
+    errorCategory: null,
   },
   {
     id: 2,
@@ -103,6 +104,7 @@ export const mockTestCases: TestCase[] = [
     durationMs: 5400,
     errorMessage: null,
     errorStack: null,
+    errorCategory: null,
   },
   {
     id: 3,
@@ -114,6 +116,7 @@ export const mockTestCases: TestCase[] = [
     durationMs: 30000,
     errorMessage: "Error: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: '장바구니 담기' })",
     errorStack: "  at AlbumBuddyPage.addToCart (tests/pages/albumbuddy.page.ts:45:18)\n  at tests/ab_monitoring_pom.spec.ts:67:5",
+    errorCategory: "selector_not_found",
   },
   {
     id: 4,
@@ -125,6 +128,7 @@ export const mockTestCases: TestCase[] = [
     durationMs: 30000,
     errorMessage: "Error: expect(received).toBeVisible()\n\nExpected: visible\nReceived: hidden\n\nCall log:\n  - expect.toBeVisible with timeout 15000ms\n  - waiting for getByText('주문서 작성')",
     errorStack: "  at tests/ab_monitoring_pom.spec.ts:89:32",
+    errorCategory: "assertion_failure",
   },
   {
     id: 5,
@@ -136,6 +140,7 @@ export const mockTestCases: TestCase[] = [
     durationMs: 30000,
     errorMessage: "Error: page.goto: net::ERR_CONNECTION_TIMED_OUT at https://albumbuddy.makestar.co/payment",
     errorStack: "  at AlbumBuddyPage.goToPayment (tests/pages/albumbuddy.page.ts:72:10)\n  at tests/ab_monitoring_pom.spec.ts:102:5",
+    errorCategory: "network_timeout",
   },
   ...Array.from({ length: 13 }, (_, i) => ({
     id: 6 + i,
@@ -147,5 +152,6 @@ export const mockTestCases: TestCase[] = [
     durationMs: 2000 + Math.floor(Math.random() * 5000),
     errorMessage: null,
     errorStack: null,
+    errorCategory: null,
   })),
 ];

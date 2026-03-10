@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { SummaryCards } from "./SummaryCards";
 import { TrendCharts } from "./TrendCharts";
+import { FlakyRanking } from "./FlakyRanking";
 import { RunsTable } from "./RunsTable";
 import type { TestRun } from "@/db/schema";
 
@@ -141,6 +142,8 @@ export function DashboardContent({
       </section>
 
       <TrendCharts suite={suite} />
+
+      <FlakyRanking suite={suite} />
 
       <section>
         <div className="flex items-center justify-between mb-4">
