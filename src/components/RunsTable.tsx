@@ -48,12 +48,22 @@ export function RunsTable({ runs }: { runs: TestRun[] }) {
         <tbody className="divide-y divide-[var(--card-border)]">
           {runs.map((run) => {
             const rate = getPassRateNumber(run.passed, run.total);
+            const hasFailure = run.failed > 0;
+            const hasFlaky = run.flaky > 0;
+            const indicatorColor = hasFailure
+              ? "bg-rose-500"
+              : hasFlaky
+                ? "bg-amber-500"
+                : "";
             return (
               <tr
                 key={run.runId}
-                className="transition-colors hover:bg-white/[0.02]"
+                className={`transition-colors hover:bg-white/[0.02] ${hasFailure ? "bg-rose-500/[0.03]" : ""}`}
               >
-                <td className="whitespace-nowrap px-5 py-4 text-sm">
+                <td className="relative whitespace-nowrap px-5 py-4 text-sm">
+                  {indicatorColor && (
+                    <span className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full ${indicatorColor}`} />
+                  )}
                   <Link
                     href={`/runs/${run.runId}`}
                     className="font-mono font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
@@ -70,10 +80,22 @@ export function RunsTable({ runs }: { runs: TestRun[] }) {
                   <StatusBadge status={run.status} />
                 </td>
                 <td className="whitespace-nowrap px-5 py-4 text-sm">
-                  <span className="font-mono text-slate-300">
-                    <span className="text-emerald-400">{run.passed}</span>
-                    <span className="text-[var(--muted)]"> / </span>
-                    <span className="text-slate-300">{run.total}</span>
+                  <span className="inline-flex items-center gap-2 font-mono text-slate-300">
+                    <span>
+                      <span className="text-emerald-400">{run.passed}</span>
+                      <span className="text-[var(--muted)]"> / </span>
+                      <span className="text-slate-300">{run.total}</span>
+                    </span>
+                    {hasFailure && (
+                      <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-400">
+                        F:{run.failed}
+                      </span>
+                    )}
+                    {hasFlaky && (
+                      <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                        FL:{run.flaky}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-5 py-4 text-sm">
