@@ -28,13 +28,6 @@ interface TrendPoint {
   runCount: number;
 }
 
-const SUITES = [
-  { value: "", label: "전체" },
-  { value: "cmr", label: "CMR" },
-  { value: "albumbuddy", label: "AlbumBuddy" },
-  { value: "admin", label: "Admin" },
-] as const;
-
 const PERIODS = [
   { value: 7, label: "7일" },
   { value: 30, label: "30일" },
@@ -103,8 +96,7 @@ function ChartCard({
   );
 }
 
-export function TrendCharts() {
-  const [suite, setSuite] = useState("");
+export function TrendCharts({ suite }: { suite: string }) {
   const [days, setDays] = useState<number>(30);
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,22 +143,6 @@ export function TrendCharts() {
           트렌드
         </h2>
         <div className="flex gap-2">
-          {/* Suite 필터 */}
-          <div className="flex rounded-lg border border-[var(--card-border)] overflow-hidden">
-            {SUITES.map((s) => (
-              <button
-                key={s.value}
-                onClick={() => setSuite(s.value)}
-                className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                  suite === s.value
-                    ? "bg-indigo-500/15 text-indigo-400"
-                    : "text-[var(--muted)] hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
           {/* 기간 필터 */}
           <div className="flex rounded-lg border border-[var(--card-border)] overflow-hidden">
             {PERIODS.map((p) => (

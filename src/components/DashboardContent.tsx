@@ -8,6 +8,13 @@ import type { TestRun } from "@/db/schema";
 
 const PAGE_SIZE = 10;
 
+const SUITES = [
+  { value: "", label: "전체" },
+  { value: "cmr", label: "CMR" },
+  { value: "albumbuddy", label: "AlbumBuddy" },
+  { value: "admin", label: "Admin" },
+] as const;
+
 export function DashboardContent({
   initialRuns,
   initialTotal,
@@ -18,6 +25,7 @@ export function DashboardContent({
   const [runs, setRuns] = useState<TestRun[]>(initialRuns);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(0);
+  const [suite, setSuite] = useState("");
   const [latestRun, setLatestRun] = useState<TestRun | null>(initialRuns[0] || null);
   const hasRunning = latestRun?.status === "running" || runs.some((r) => r.status === "running");
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -25,9 +33,11 @@ export function DashboardContent({
   const fetchRuns = useCallback(
     async (p: number) => {
       try {
-        const res = await fetch(
-          `/api/runs?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`
-        );
+        const url = new URL("/api/runs", window.location.origin);
+        url.searchParams.set("limit", String(PAGE_SIZE));
+        url.searchParams.set("offset", String(p * PAGE_SIZE));
+        if (suite) url.searchParams.set("suite", suite);
+        const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
         setRuns(data.runs);
@@ -40,24 +50,34 @@ export function DashboardContent({
         // ignore
       }
     },
-    []
+    [suite]
   );
 
   // 최신 run은 페이지와 무관하게 항상 갱신
   const fetchLatestRun = useCallback(async () => {
     try {
-      const res = await fetch("/api/runs?limit=1&offset=0");
+      const url = new URL("/api/runs", window.location.origin);
+      url.searchParams.set("limit", "1");
+      url.searchParams.set("offset", "0");
+      if (suite) url.searchParams.set("suite", suite);
+      const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
       if (data.runs.length > 0) setLatestRun(data.runs[0]);
     } catch {
       // ignore
     }
-  }, []);
+  }, [suite]);
+
+  // suite 변경 시 page 리셋 및 데이터 재조회
+  useEffect(() => {
+    setPage(0);
+    fetchRuns(0);
+  }, [suite]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 페이지 변경 시 데이터 fetch
   useEffect(() => {
-    if (page === 0) return; // 첫 페이지는 initialRuns 사용
+    if (page === 0) return; // 첫 페이지는 suite 변경 effect에서 처리
     fetchRuns(page);
   }, [page, fetchRuns]);
 
@@ -84,25 +104,43 @@ export function DashboardContent({
 
   return (
     <>
-      <section className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-            최근 실행 요약
-          </h2>
-          {hasRunning && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-              </span>
-              실행 중
-            </span>
-          )}
+      {/* Suite 필터 */}
+      <div className="mb-6 flex items-center gap-3">
+        <span className="text-xs font-medium text-[var(--muted)]">Suite</span>
+        <div className="flex rounded-lg border border-[var(--card-border)] overflow-hidden">
+          {SUITES.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setSuite(s.value)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                suite === s.value
+                  ? "bg-indigo-500/15 text-indigo-400"
+                  : "text-[var(--muted)] hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
+        {hasRunning && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            실행 중
+          </span>
+        )}
+      </div>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--muted)] mb-4">
+          최근 실행 요약
+        </h2>
         <SummaryCards latestRun={latestRun} />
       </section>
 
-      <TrendCharts />
+      <TrendCharts suite={suite} />
 
       <section>
         <div className="flex items-center justify-between mb-4">
