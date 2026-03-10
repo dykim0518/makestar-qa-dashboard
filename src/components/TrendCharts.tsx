@@ -298,8 +298,8 @@ export function TrendCharts({ suite }: { suite: string }) {
             </ResponsiveContainer>
           </ChartCard>
 
-          {/* 테스트 결과 분포 */}
-          <ChartCard title="테스트 결과 분포" fullWidth>
+          {/* 일별 실패/Flaky 추이 */}
+          <ChartCard title="일별 실패 · Flaky 추이" fullWidth>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={chartData}>
                 <CartesianGrid
@@ -318,27 +318,21 @@ export function TrendCharts({ suite }: { suite: string }) {
                   tick={axisStyle}
                   axisLine={false}
                   tickLine={false}
+                  allowDecimals={false}
                   width={40}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar
-                  dataKey="passed"
-                  name="Passed"
-                  stackId="results"
-                  fill="#34d399"
-                  radius={[0, 0, 0, 0]}
-                />
-                <Bar
                   dataKey="failed"
                   name="Failed"
-                  stackId="results"
+                  stackId="issues"
                   fill="#fb7185"
                   radius={[0, 0, 0, 0]}
                 />
                 <Bar
                   dataKey="flaky"
                   name="Flaky"
-                  stackId="results"
+                  stackId="issues"
                   fill="#fbbf24"
                   radius={[2, 2, 0, 0]}
                 />
