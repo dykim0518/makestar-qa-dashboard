@@ -85,8 +85,10 @@ export default function TriggerPage() {
       // running 상태 감지 시 자동 폴링 시작
       if (run.status === "running") {
         setPolling(true);
-        setTriggered(true);
       }
+
+      // running 또는 최근 완료된 run이 있으면 결과 패널 표시
+      setTriggered(true);
 
       const casesRes = await fetch(`/api/runs/${run.runId}/tests`);
       if (casesRes.ok) {
@@ -99,9 +101,20 @@ export default function TriggerPage() {
     }
   }, [prevRunId, waitingForNewRun]);
 
-  // 페이지 진입 시 실행 중인 테스트가 있는지 확인
+  // 페이지 진입 시 최신 테스트 결과 확인 (running + 완료 모두)
   useEffect(() => {
     fetchLatestResults();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 탭 전환/페이지 복귀 시 데이터 갱신
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        fetchLatestResults();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchLatestResults]);
 
   // 폴링: 새 run 대기 중이거나 running 상태일 때 5초, 아니면 15초

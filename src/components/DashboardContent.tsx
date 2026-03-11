@@ -82,15 +82,26 @@ export function DashboardContent({
     fetchRuns(page);
   }, [page, fetchRuns]);
 
-  // running 상태가 있을 때만 5초 폴링 (현재 페이지 + 최신 run)
+  // running 상태: 5초 빠른 폴링, 아닐 때: 30초 느린 폴링 (새 run 감지)
   useEffect(() => {
-    if (!hasRunning) return;
     const interval = setInterval(() => {
       fetchRuns(page);
       if (page !== 0) fetchLatestRun();
-    }, 5000);
+    }, hasRunning ? 5000 : 30000);
     return () => clearInterval(interval);
   }, [hasRunning, page, fetchRuns, fetchLatestRun]);
+
+  // 페이지 복귀(탭 전환, 네비게이션 복귀) 시 데이터 갱신
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible") {
+        fetchRuns(page);
+        if (page !== 0) fetchLatestRun();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [page, fetchRuns, fetchLatestRun]);
 
   function goToPage(p: number) {
     if (p < 0 || p >= totalPages) return;
