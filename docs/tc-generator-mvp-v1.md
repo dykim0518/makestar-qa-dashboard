@@ -1,7 +1,7 @@
 # TC 자동생성 웹도구 MVP 설계 v1
 
 - 작성일: 2026-03-10 (KST)
-- 대상 저장소: `makestar-qa-dashboard`
+- 대상 저장소: `makestar-qa-hub`
 - 목적: Notion/PDF/Figma 입력 기반으로 테스트 케이스를 자동 생성하고 Google Sheets로 배포
 
 ## 1) 입력 소스 확인 결과
